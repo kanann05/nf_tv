@@ -1,7 +1,16 @@
-import React, { useRef, useState } from 'react';
-import { View, TextInput, Button, StyleSheet, TVFocusGuideView, Text, Pressable } from 'react-native';
+import React, { useRef, useState, useEffect  } from 'react';
+import { ScrollView,View, Image, TextInput, Button, StyleSheet, TouchableOpacity, TVFocusGuideView, Text, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Int32 } from 'react-native/Libraries/Types/CodegenTypes';
+import { createStaticNavigation, NavigationContainer, useNavigation, RouteProp } from '@react-navigation/native';
+import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ParamListBase } from '@react-navigation/core';
 
-export default function App() {
+
+function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
+  let [username, setUsername] = useState("");
+  let [password, setPassword] = useState("");
+
   let inputRef1 = useRef<TextInput>(null);
   let inputRef2 = useRef<TextInput>(null);
 
@@ -18,45 +27,109 @@ export default function App() {
   };
 
   return (
-    <TVFocusGuideView style={styles.container}>
-      <TVFocusGuideView style={styles.inputContainer}>
-        <TextInput ref={inputRef1} style={styles.input} placeholder="input" />
+    <TVFocusGuideView style={styleslogin.container}>
+      <TVFocusGuideView style={styleslogin.inputContainer}>
+        <TextInput value = {username} onChangeText = {(text) => {setUsername(text)}} ref={inputRef1} style={styleslogin.input} placeholder="username" />
         <Pressable
           onPress={() => {
             focusInput1();
             console.log('pressed f');
           }}
-          style={styles.button}
+          style={styleslogin.button}
           hasTVPreferredFocus={true}
         >
-          <Text style={styles.buttonText}>press</Text>
+          <Text style={styleslogin.buttonText}>press</Text>
         </Pressable>
       </TVFocusGuideView>
 
-      <TVFocusGuideView style={styles.inputContainer}>
-        <TextInput ref={inputRef2} style={styles.input} placeholder="input2" />
+      <TVFocusGuideView style={styleslogin.inputContainer}>
+        <TextInput value = {password} onChangeText = {(text) => {setPassword(text)}} ref={inputRef2} style={styleslogin.input} placeholder="password" />
         <Pressable
           onPress={() => {
             focusInput2();
             console.log('pressed s');
           }}
-          style={styles.button}
+          style={styleslogin.button}
         >
-          <Text style={styles.buttonText}>press</Text>
+          <Text style={styleslogin.buttonText}>press</Text>
         </Pressable>
       </TVFocusGuideView>
+      <TouchableOpacity style={{ backgroundColor: "black", width: 150, height: 30, justifyContent: "center", alignItems: "center" }} onPress={async () => {
+         console.log("submit clicked")
+               const response = await fetch('http://192.168.1.18:5000/login', {
+                 
+                 method : 'POST',
+                 headers: {
+                   'Content-type': 'application/json',
+                 },
+                 body: JSON.stringify({ username: username, password: password }),
+               });
+               console.log(response.ok)
+               if(response.ok) {
+                 const data = await response.json();
+                 console.log(data)
+                 if(data) {
+                   // console.log(data);
+                   await AsyncStorage.setItem('username', username);
+                   await AsyncStorage.setItem('accessToken', data.accesstoken);
+                 }
+               }
+               let checkToken = async () => {
+               console.log("submit clicked2")
+                 
+               const token = await AsyncStorage.getItem('accessToken');
+               const user = await AsyncStorage.getItem('username');
+               try {
+                 const response2 = await fetch('http://192.168.1.18:5000/checkTok', {
+                   method: 'POST',
+                   headers: {
+                     'Content-Type': 'application/json',
+                   },
+                   body: JSON.stringify({ accesstoken: token, username : user })
+                   
+                 });
+         
+                 if(!response2.ok) {
+                   console.log(response2)
+                   await AsyncStorage.setItem('username', "");
+                   await AsyncStorage.setItem('accessToken', "");
+               console.log("submit clicked34")
+         
+                   return;
+                 }
+                 //here, we gotta put await async storage set item accesstoken, for testing purposes gonna make it so i gotta log in on every reload
+                 let data2 = await response2.json();
+                 if(data2) {
+               console.log("submit clicked3")
+         
+                   await AsyncStorage.setItem('data', JSON.stringify(data2));
+                   setLoggedin(true);
+                   console.log("asf")
+                 }
+                 
+         
+               }
+               catch (error) {
+                 console.log("Error while logging in : " + error);
+               }
+               
+             }
+             checkToken();
+      }}>
+          <Text style={{ color: "white" }}>Login</Text>
+      </TouchableOpacity>
     </TVFocusGuideView>
   );
 }
 
-const styles = StyleSheet.create({
+const styleslogin = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   inputContainer: {
-    marginBottom: 40,
+    // marginBottom: 40,
     alignItems: 'center',
   },
   input: {
@@ -75,13 +148,286 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 5,
     position : 'absolute',
-    opacity : 0.5
+    opacity : 0
   },
   buttonText: {
     color: 'white',
     fontSize: 16,
   },
 });
+
+type RootStackParamList = {
+  home: undefined; // No params for 'home' screen
+  main: { showName: string }; // 'main' expects 'showName' parameter of type string
+};
+
+// Define the route type for the 'main' screen
+// type MainScreenRouteProp = RouteProp<RootStackParamList, 'main'>;
+
+// interface MainScreenProps {
+//   route: MainScreenRouteProp;
+// }
+
+function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
+  // Access 'showName' from 'route.params'
+  const { showName } = route.params;
+
+  return (
+    <View>
+      <Text>Wow, {showName} is awesome.</Text>
+    </View>
+  );
+}
+
+
+function Folder({i, folderName, imgUrl, accessToken }: {i : Int32, folderName: String, imgUrl: String, accessToken: String }) {
+  let [opacity, setOpacity] = useState(1);
+  let [img, setImg] = useState<String>("");
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  useEffect(() => {
+    if(imgUrl.charAt(0) == '/') {
+      setImg(`http://192.168.1.18:5000${imgUrl}/${accessToken}`);
+    }
+    else {
+      setImg(imgUrl);
+    }
+  }, [])
+
+  return (
+    <Pressable 
+      style={{ opacity: opacity }} 
+      onFocus={() => { setOpacity(0.5) }} 
+      onBlur={() => setOpacity(1)}
+      onPress={() => { console.log("clicked " + folderName);
+        navigation.navigate('main', { showName: String(folderName) });
+       }}
+    >
+      <Image style = {{width:100, aspectRatio:16/9}} source={{uri : String(img)}} />
+      <Text>{folderName}</Text>
+    </Pressable>
+  );
+}
+
+function Home({ setLoggedin} : {setLoggedin : (value : boolean) => void}) {
+  const [data, setData] = useState<{ foldername: String, img: String }[] | null>(null);
+  const [accessToken, setAccessToken] = useState(""); // Use state for accessToken
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const temp = await AsyncStorage.getItem('data');
+        if (temp) {
+          console.log("temp " + temp);
+          const parsedData = JSON.parse(temp);
+          setData(parsedData);
+        }
+
+        const token = await AsyncStorage.getItem("accessToken");
+        setAccessToken(token || ""); // Set the access token in state
+        console.log("accessToken " + token);
+      } catch (error) {
+        console.log('Error retrieving data from AsyncStorage:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  return (
+    <TVFocusGuideView style = {{minHeight : '100%', width : '100%', position : 'relative'}}>
+      <TVFocusGuideView style = {{ paddingLeft : 30, paddingRight : 30, marginTop: 10, position : 'relative', height : '6%', marginBottom : 50, display : 'flex', flexDirection : 'row', justifyContent : 'space-between' }}>
+
+        <TouchableOpacity style = {{width : '50%', height : '100%', backgroundColor : 'grey'}}>
+        </TouchableOpacity>
+        <TouchableOpacity onPress = {async() => {
+          await AsyncStorage.setItem("data", "");
+          await AsyncStorage.setItem("accessToken", "");
+          await AsyncStorage.setItem("username", "");
+          setLoggedin(false);
+
+        }} style = {{height : '100%'}}>
+          <Text style = {{height : 40, fontSize : 15, paddingLeft : 10, paddingRight : 10, paddingTop : 10, paddingBottom : 10, color : 'white', backgroundColor : 'grey' }}>Log out</Text>
+        </TouchableOpacity>
+      </TVFocusGuideView>
+      <ScrollView contentContainerStyle={{ width : '100%', display :'flex', alignItems : 'center', justifyContent:'center', flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 }}>
+        <TVFocusGuideView style={{ flexDirection: 'row', flexWrap: 'wrap', width: '90%' }}>
+          {Array.isArray(data) ? (
+            data.map((f, i) => (
+              <Folder 
+                accessToken={accessToken} 
+                imgUrl={f.img} 
+                folderName={f.foldername} 
+                key={i} i = {i}
+                
+              />
+            ))
+          ) : (null)}
+        </TVFocusGuideView>
+      </ScrollView>
+    </TVFocusGuideView>
+  );
+}
+
+
+function Wrapper() {
+  let [loggedin, setLoggedin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+        console.log("here")
+        const checkToken = async () => {
+          const token = await AsyncStorage.getItem('accessToken');
+          const user = await AsyncStorage.getItem('username');
+          console.log(token)
+          try {
+            const response = await fetch('http://192.168.1.18:5000/checkTok', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ accesstoken: token, username : user })
+              
+            });
+         
+            if(!response.ok) {
+              await AsyncStorage.setItem('username', "");
+              await AsyncStorage.setItem('accessToken', "");
+              setLoggedin(false);
+              return;
+            }
+            let data = await response.json();
+            if(data) {
+              
+            
+              await AsyncStorage.setItem('data', JSON.stringify(data));
+    
+             
+            
+              console.log(await AsyncStorage.getItem('data')); 
+    
+              // console.log(AsyncStorage.setItem('data', JSON.stringify(data)))
+              setLoggedin(true);
+            }
+          }
+          catch (error) {
+            console.log("Error while logging in : " + error);
+          }
+        }
+        checkToken()
+      }, [])
+
+      return(
+        <TVFocusGuideView style = {{width : "100%", height : "100%", justifyContent : "center", alignItems : "center"}}>
+         {!loggedin ? (<Login setLoggedin = {setLoggedin}/>) : (<Home setLoggedin={setLoggedin} />)}
+        </TVFocusGuideView>
+      );
+    
+}
+const stuff = 'Some Show Name'; // Define this value or pass it dynamically
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+function RootStack() {
+  return (
+    <Stack.Navigator initialRouteName='home'>
+      <Stack.Screen name="home" component={Wrapper} options={ {headerShown : false}}/>
+      <Stack.Screen name = "main" component={Main} initialParams = {{showName : "xyz"}} options={{headerShown : false}}/>
+    </Stack.Navigator>
+  );
+}
+
+export default function App() {
+  return (<NavigationContainer>
+    <RootStack />
+  </NavigationContainer>);
+}
+
+
+// import React, { useRef, useState } from 'react';
+// import { View, TextInput, Button, StyleSheet, TVFocusGuideView, Text, Pressable } from 'react-native';
+
+// export default function App() {
+//   let inputRef1 = useRef<TextInput>(null);
+//   let inputRef2 = useRef<TextInput>(null);
+
+//   const focusInput1 = () => {
+//     if (inputRef1.current) {
+//       inputRef1.current.focus();
+//     }
+//   };
+
+//   const focusInput2 = () => {
+//     if (inputRef2.current) {
+//       inputRef2.current.focus();
+//     }
+//   };
+
+//   return (
+//     <TVFocusGuideView style={styles.container}>
+//       <TVFocusGuideView style={styles.inputContainer}>
+//         <TextInput ref={inputRef1} style={styles.input} placeholder="username" />
+//         <Pressable
+//           onPress={() => {
+//             focusInput1();
+//             console.log('pressed f');
+//           }}
+//           style={styles.button}
+//           hasTVPreferredFocus={true}
+//         >
+//           <Text style={styles.buttonText}>press</Text>
+//         </Pressable>
+//       </TVFocusGuideView>
+
+//       <TVFocusGuideView style={styles.inputContainer}>
+//         <TextInput ref={inputRef2} style={styles.input} placeholder="password" />
+//         <Pressable
+//           onPress={() => {
+//             focusInput2();
+//             console.log('pressed s');
+//           }}
+//           style={styles.button}
+//         >
+//           <Text style={styles.buttonText}>press</Text>
+//         </Pressable>
+//       </TVFocusGuideView>
+//       <Button title='login'/>
+//     </TVFocusGuideView>
+//   );
+// }
+
+// const styles = StyleSheet.create({
+//   container: {
+//     flex: 1,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//   },
+//   inputContainer: {
+//     marginBottom: 40,
+//     alignItems: 'center',
+//   },
+//   input: {
+//     height: 40,
+//     borderColor: 'gray',
+//     borderWidth: 1,
+//     paddingLeft: 10,
+//     width: 200,
+//     marginBottom: 10,
+//   },
+//   button: {
+//     width: 200,
+//     height: 40,
+//     backgroundColor: '#007BFF',
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     borderRadius: 5,
+//     position : 'absolute',
+//     opacity : 0
+//   },
+//   buttonText: {
+//     color: 'white',
+//     fontSize: 16,
+//   },
+// });
 
 
 
