@@ -157,11 +157,11 @@ const styleslogin = StyleSheet.create({
 });
 
 type RootStackParamList = {
-  home: undefined; // No params for 'home' screen
-  main: { showName: string }; // 'main' expects 'showName' parameter of type string
+  home: undefined; 
+  main: { showName: string }; 
 };
 
-// Define the route type for the 'main' screen
+
 // type MainScreenRouteProp = RouteProp<RootStackParamList, 'main'>;
 
 // interface MainScreenProps {
@@ -323,7 +323,7 @@ function Wrapper() {
       );
     
 }
-const stuff = 'Some Show Name'; // Define this value or pass it dynamically
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
