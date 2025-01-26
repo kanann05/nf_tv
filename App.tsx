@@ -169,13 +169,84 @@ type RootStackParamList = {
 // }
 
 function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
-  // Access 'showName' from 'route.params'
+  
   const { showName } = route.params;
+  let [sf, setSf] = useState<string[] | null>(null);
+  let [videos, setVideos] = useState<{videoname : string, src : string}[] | null>(null);
+  // const fetchVideos = async ({subfolder} : {subfolder : string}) => {
+  //   // let folder = await AsyncStorage.getItem('username')
+  //     fetch('videos', {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //           user: localStorage.getItem("username"),
+  //           folder: showName,
+  //           subfolder: subfolder,
+  //       }),
+  //   })
+  //       .then((res) => {
+  //           if (!res.ok) {
+  //               throw new Error(`HTTP error! status: ${res.status}`);
+  //           }
+  //           return res.json(); 
+  //       })
+  //       .then((data) => {
+  //           console.log(data)
+  //           setVideos(data);
+  //       })
+  //       .catch((error) => {
+  //           console.error('Error:', error);
+  //       });
+    
+    
+    
+  // }
+  // }
+  useEffect(() => { 
+    const fetchData = async () => {
+      let username = await AsyncStorage.getItem('username')
+      try {
+        const res = await fetch('http://192.168.1.18:5000/subfolders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: username,
+            folder: showName,
+          }),
+        });
+  
+        if (!res.ok) {
+          console.log("error in getting subfolders");
+          return;
+        }
+  
+        // Log the response text to inspect it
+        const responseText = await res.text();  // Use `.text()` to get the raw response
+        console.log("Response text:", responseText);
+  
+        // Now parse the response if it's valid JSON
+        const data = JSON.parse(responseText);
+        setSf(data);  // Assuming the data is already in an array format
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+  
+    fetchData();
+  }, [showName]);
+  
 
   return (
-    <View>
-      <Text>Wow, {showName} is awesome.</Text>
-    </View>
+    // <View>
+    //   <Text>Wow, {showName} is awesome.</Text>
+    // </View>
+    <TVFocusGuideView style = {{display : 'flex', flexDirection : 'row', width : '100%', minHeight : '100%'}}>
+      <ScrollView>
+      <TVFocusGuideView style = {{marginTop : 50, width : '30%', display : 'flex', flexDirection : 'column', alignItems : 'center', justifyContent : 'flex-start'}}>
+        {sf == null ? (null) : (sf.map((f,i) => (<TouchableOpacity key = {i}><Text>{f}</Text></TouchableOpacity>)))}
+      </TVFocusGuideView>
+      </ScrollView>
+    </TVFocusGuideView>
   );
 }
 
@@ -211,7 +282,7 @@ function Folder({i, folderName, imgUrl, accessToken }: {i : Int32, folderName: S
 
 function Home({ setLoggedin} : {setLoggedin : (value : boolean) => void}) {
   const [data, setData] = useState<{ foldername: String, img: String }[] | null>(null);
-  const [accessToken, setAccessToken] = useState(""); // Use state for accessToken
+  const [accessToken, setAccessToken] = useState(""); 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -224,7 +295,7 @@ function Home({ setLoggedin} : {setLoggedin : (value : boolean) => void}) {
         }
 
         const token = await AsyncStorage.getItem("accessToken");
-        setAccessToken(token || ""); // Set the access token in state
+        setAccessToken(token || ""); 
         console.log("accessToken " + token);
       } catch (error) {
         console.log('Error retrieving data from AsyncStorage:', error);
