@@ -1,10 +1,13 @@
 import React, { useRef, useState, useEffect  } from 'react';
 import { ScrollView,View, Image, TextInput, Button, StyleSheet, TouchableOpacity, TVFocusGuideView, Text, Pressable } from 'react-native';
+import Video,{VideoRef} from 'react-native-video'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Int32 } from 'react-native/Libraries/Types/CodegenTypes';
 import { createStaticNavigation, NavigationContainer, useNavigation, RouteProp } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ParamListBase } from '@react-navigation/core';
+import VideoPlayer, { type VideoPlayerRef } from 'react-native-video-player';
+import { Form } from 'react-router-dom';
 
 
 function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
@@ -56,7 +59,7 @@ function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
       </TVFocusGuideView>
       <TouchableOpacity style={{ backgroundColor: "black", width: 150, height: 30, justifyContent: "center", alignItems: "center" }} onPress={async () => {
          console.log("submit clicked")
-               const response = await fetch('http://192.168.1.18:5000/login', {
+               const response = await fetch('http://172.16.61.136:5000/login', {
                  
                  method : 'POST',
                  headers: {
@@ -80,7 +83,7 @@ function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
                const token = await AsyncStorage.getItem('accessToken');
                const user = await AsyncStorage.getItem('username');
                try {
-                 const response2 = await fetch('http://192.168.1.18:5000/checkTok', {
+                 const response2 = await fetch('http://172.16.61.136:5000/checkTok', {
                    method: 'POST',
                    headers: {
                      'Content-Type': 'application/json',
@@ -159,6 +162,7 @@ const styleslogin = StyleSheet.create({
 type RootStackParamList = {
   home: undefined; 
   main: { showName: string }; 
+  player : {src : string};
 };
 
 
@@ -168,45 +172,94 @@ type RootStackParamList = {
 //   route: MainScreenRouteProp;
 // }
 
+function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> }) {
+  const { src } = route.params;
+  let [play, setPlay] = useState(true);
+  const videoRef = useRef<VideoPlayerRef>(null);
+
+  return (
+    <TVFocusGuideView style={{ flex: 1 }}>
+      {/* Touchable area to pause/play the video */}
+      <TouchableOpacity
+        hasTVPreferredFocus={true}
+        onPress={() => {
+          if (play) {
+            videoRef.current?.pause();
+            setPlay(!play);
+          } else {
+            videoRef.current?.resume();
+            setPlay(!play);
+          }
+        }}
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          zIndex: 10,
+          left: 0,
+          top: 0,
+          backgroundColor: 'transparent', // Make it invisible but clickable
+        }}
+      />
+
+      {/* Video Player */}
+      <Video
+        ref={videoRef}
+        source={{ uri: String(src) }}
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        }}
+      />
+
+      {/* Bottom red bar with volume and audio/subtitles buttons */}
+      
+    </TVFocusGuideView>
+  );
+}
 function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
-  
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const { showName } = route.params;
   let [sf, setSf] = useState<string[] | null>(null);
   let [videos, setVideos] = useState<{videoname : string, src : string}[] | null>(null);
-  // const fetchVideos = async ({subfolder} : {subfolder : string}) => {
-  //   // let folder = await AsyncStorage.getItem('username')
-  //     fetch('videos', {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({
-  //           user: localStorage.getItem("username"),
-  //           folder: showName,
-  //           subfolder: subfolder,
-  //       }),
-  //   })
-  //       .then((res) => {
-  //           if (!res.ok) {
-  //               throw new Error(`HTTP error! status: ${res.status}`);
-  //           }
-  //           return res.json(); 
-  //       })
-  //       .then((data) => {
-  //           console.log(data)
-  //           setVideos(data);
-  //       })
-  //       .catch((error) => {
-  //           console.error('Error:', error);
-  //       });
-    
-    
-    
-  // }
-  // }
+  const fetchVideos = async (subfolder: string) => {
+    let username = await AsyncStorage.getItem('username')
+    try {
+      const res = await fetch('http://172.16.61.136:5000/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: username,
+          folder: showName,
+          subfolder: subfolder,
+        }),
+      });
+  
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+  
+      // Read the response body once
+      const responseText = await res.text(); // Use `.text()` to get the raw response
+  
+      console.log("Response text:", responseText);
+      const data = JSON.parse(responseText); // Now safely parse the JSON
+      setVideos(data); // Set your videos state
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+  
+  
   useEffect(() => { 
     const fetchData = async () => {
       let username = await AsyncStorage.getItem('username')
       try {
-        const res = await fetch('http://192.168.1.18:5000/subfolders', {
+        const res = await fetch('http://172.16.61.136:5000/subfolders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -243,8 +296,13 @@ function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
     <TVFocusGuideView style = {{display : 'flex', flexDirection : 'row', width : '100%', minHeight : '100%'}}>
       <ScrollView>
       <TVFocusGuideView style = {{marginTop : 50, width : '30%', display : 'flex', flexDirection : 'column', alignItems : 'center', justifyContent : 'flex-start'}}>
-        {sf == null ? (null) : (sf.map((f,i) => (<TouchableOpacity key = {i}><Text>{f}</Text></TouchableOpacity>)))}
+        {sf == null ? (null) : (sf.map((f,i) => (<TouchableOpacity onPress = {() => {fetchVideos(f)}} key = {i}><Text>{f}</Text></TouchableOpacity>)))}
       </TVFocusGuideView>
+      </ScrollView>
+      <ScrollView>
+        <TVFocusGuideView style = {{marginTop : 50, width : '50%', display : 'flex', flexDirection : 'column', alignItems : 'center', justifyContent : 'center'}}>
+          {videos == null ? (null) : (videos.map((f, i) => (<TouchableOpacity onPress ={() => {navigation.navigate('player', {src : f.src})}}key = {i}><Text>{f.videoname}</Text></TouchableOpacity>)))}
+        </TVFocusGuideView>
       </ScrollView>
     </TVFocusGuideView>
   );
@@ -258,7 +316,7 @@ function Folder({i, folderName, imgUrl, accessToken }: {i : Int32, folderName: S
 
   useEffect(() => {
     if(imgUrl.charAt(0) == '/') {
-      setImg(`http://192.168.1.18:5000${imgUrl}/${accessToken}`);
+      setImg(`http://172.16.61.136:5000${imgUrl}/${accessToken}`);
     }
     else {
       setImg(imgUrl);
@@ -351,7 +409,7 @@ function Wrapper() {
           const user = await AsyncStorage.getItem('username');
           console.log(token)
           try {
-            const response = await fetch('http://192.168.1.18:5000/checkTok', {
+            const response = await fetch('http://172.16.61.136:5000/checkTok', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -403,6 +461,8 @@ function RootStack() {
     <Stack.Navigator initialRouteName='home'>
       <Stack.Screen name="home" component={Wrapper} options={ {headerShown : false}}/>
       <Stack.Screen name = "main" component={Main} initialParams = {{showName : "xyz"}} options={{headerShown : false}}/>
+      <Stack.Screen name = "player" component={Player} initialParams = {{src : "xyz"}} options={{headerShown : false}}/>
+
     </Stack.Navigator>
   );
 }
