@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect  } from 'react';
-import { ScrollView,View, Image, TextInput, Button, StyleSheet, TouchableOpacity, TVFocusGuideView, Text, Pressable } from 'react-native';
+import { ScrollView,View, Image, TextInput, Button, StyleSheet, TouchableOpacity, TVFocusGuideView, Text, Pressable, TVRemoteEvent } from 'react-native';
 import Video,{VideoRef} from 'react-native-video'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Int32 } from 'react-native/Libraries/Types/CodegenTypes';
@@ -8,6 +8,7 @@ import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-na
 import { ParamListBase } from '@react-navigation/core';
 import VideoPlayer, { type VideoPlayerRef } from 'react-native-video-player';
 import { Form } from 'react-router-dom';
+import { TVEventHandler, useTVEventHandler, HWEvent } from 'react-native';
 
 
 function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
@@ -59,7 +60,7 @@ function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
       </TVFocusGuideView>
       <TouchableOpacity style={{ backgroundColor: "black", width: 150, height: 30, justifyContent: "center", alignItems: "center" }} onPress={async () => {
          console.log("submit clicked")
-               const response = await fetch('http://172.16.61.136:5000/login', {
+               const response = await fetch('http://192.168.1.18:5000/login', {
                  
                  method : 'POST',
                  headers: {
@@ -83,7 +84,7 @@ function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
                const token = await AsyncStorage.getItem('accessToken');
                const user = await AsyncStorage.getItem('username');
                try {
-                 const response2 = await fetch('http://172.16.61.136:5000/checkTok', {
+                 const response2 = await fetch('http://192.168.1.18:5000/checkTok', {
                    method: 'POST',
                    headers: {
                      'Content-Type': 'application/json',
@@ -172,15 +173,33 @@ type RootStackParamList = {
 //   route: MainScreenRouteProp;
 // }
 
-function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> }) {
+function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  {
   const { src } = route.params;
   let [play, setPlay] = useState(true);
   const videoRef = useRef<VideoPlayerRef>(null);
+  const [ppb, setPpb] = useState(true);
+  const [volume, setVolume] = useState(1);
+  let [viz, setViz] = useState(true)
 
+  const [lastEventType, setLastEventType] = React.useState("");
+
+  const myTVEventHandler = (evt:HWEvent) => {
+    console.log(evt.eventType)
+    setLastEventType(evt.eventType)
+    };
+    useTVEventHandler(myTVEventHandler);
+
+    useEffect(()=>{console.log(lastEventType)},[lastEventType])
+  
+  useEffect(() => {
+    videoRef.current?.setVolume(1);
+  }, [videoRef])
+ 
   return (
-    <TVFocusGuideView style={{ flex: 1 }}>
+    <TVFocusGuideView style={{ position : 'relative', width : '100%', height : '100%' }}>
+
       {/* Touchable area to pause/play the video */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         hasTVPreferredFocus={true}
         onPress={() => {
           if (play) {
@@ -200,7 +219,34 @@ function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> }) {
           top: 0,
           backgroundColor: 'transparent', // Make it invisible but clickable
         }}
-      />
+      /> */}
+
+<TVFocusGuideView hasTVPreferredFocus = {true} style={{
+  
+      width: '80%',
+      height: 70,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius : 5,
+      position: 'absolute', 
+      bottom: 20, 
+      left: '10%', 
+      zIndex : 20,
+      display : 'flex',
+      justifyContent : 'center',
+      alignItems : 'center', flexDirection : 'row'
+  }}>
+    <TouchableOpacity hasTVPreferredFocus = {ppb} onBlur={() => {setPpb(false)}} onPress={() => {
+      if(play) {
+        videoRef.current?.pause();
+        setPlay(!play)
+      }
+      else {
+        videoRef.current?.resume();
+        setPlay(!play)
+      }
+    }} style = {{width : 100, height : 40, backgroundColor : 'rgba(0, 0, 0, 0.8)', borderRadius : 3, paddingLeft : 10, paddingRight : 10, paddingTop : 10, paddingBottom : 10, display : 'flex', justifyContent : 'center', alignItems : 'center'}}><Text style = {{color : 'white',  display : 'flex', justifyContent : 'center', alignItems : 'center'}}>{play? "pause" : "play"}</Text></TouchableOpacity>
+    <TVFocusGuideView style = {{width : 120, height : 40, backgroundColor : 'rgba(0, 0, 0, 0.8)', borderRadius : 3, paddingLeft : 10, paddingRight : 10, paddingTop : 10, paddingBottom : 10, display : 'flex', justifyContent : 'space-between', position : 'relative', alignItems : 'center', flexDirection : 'row'}}><TouchableOpacity onPress = {() => {if(volume > 0) {videoRef.current?.setVolume(volume - 0.2); setVolume(volume - 0.2)}}} style = {{height : 40, width : '10%', display : 'flex', justifyContent : 'center', alignItems : 'center'}}><Text style = {{color : "white", fontSize : 30}}>-</Text></TouchableOpacity><Text style = {{width : '80%', color : 'white',  display : 'flex', justifyContent : 'center', alignItems : 'center',textAlign : 'center'}}>Volume</Text><TouchableOpacity onPress = {() => {if(volume < 1) {videoRef.current?.setVolume(volume + 0.2); setVolume(volume + 0.2)}}} style = {{height : 40, width : '10%', display : 'flex', justifyContent : 'center', alignItems : 'center'}}><Text style = {{color : "white", fontSize : 20}}>+</Text></TouchableOpacity></TVFocusGuideView>
+</TVFocusGuideView>
 
       {/* Video Player */}
       <Video
@@ -229,7 +275,7 @@ function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
   const fetchVideos = async (subfolder: string) => {
     let username = await AsyncStorage.getItem('username')
     try {
-      const res = await fetch('http://172.16.61.136:5000/videos', {
+      const res = await fetch('http://192.168.1.18:5000/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -259,7 +305,7 @@ function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
     const fetchData = async () => {
       let username = await AsyncStorage.getItem('username')
       try {
-        const res = await fetch('http://172.16.61.136:5000/subfolders', {
+        const res = await fetch('http://192.168.1.18:5000/subfolders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -316,7 +362,7 @@ function Folder({i, folderName, imgUrl, accessToken }: {i : Int32, folderName: S
 
   useEffect(() => {
     if(imgUrl.charAt(0) == '/') {
-      setImg(`http://172.16.61.136:5000${imgUrl}/${accessToken}`);
+      setImg(`http://192.168.1.18:5000${imgUrl}/${accessToken}`);
     }
     else {
       setImg(imgUrl);
@@ -409,7 +455,7 @@ function Wrapper() {
           const user = await AsyncStorage.getItem('username');
           console.log(token)
           try {
-            const response = await fetch('http://172.16.61.136:5000/checkTok', {
+            const response = await fetch('http://192.168.1.18:5000/checkTok', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
