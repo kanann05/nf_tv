@@ -9,7 +9,20 @@ import { ParamListBase } from '@react-navigation/core';
 import VideoPlayer, { type VideoPlayerRef } from 'react-native-video-player';
 import { Form } from 'react-router-dom';
 import { TVEventHandler, useTVEventHandler, HWEvent } from 'react-native';
+import Subtitles from 'react-native-subtitles'
+import SrtParser from 'srt-parser-2';
 
+
+
+const convertTimeToSeconds = (timeString : string) => {
+  const [hh, mm, ss, ms] = timeString.split(/[:,]/);
+  return (
+    parseInt(hh) * 3600 +
+    parseInt(mm) * 60 +
+    parseInt(ss) +
+    parseInt(ms) / 1000
+  );
+};
 
 function Login({setLoggedin} : {setLoggedin : (value:boolean) => void}) {
   let [username, setUsername] = useState("");
@@ -172,16 +185,85 @@ type RootStackParamList = {
 // interface MainScreenProps {
 //   route: MainScreenRouteProp;
 // }
-
+interface Subtitle {
+  id: string;
+  startTime: string;
+  startSeconds: number;  
+  endTime: string;
+  endSeconds: number;   
+  text: string;
+}
 function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  {
   const { src } = route.params;
+  let [url, setUrl] = useState("");
+  const [subtitles, setSubtitles] =  useState<Subtitle[]>([]); 
+  const [currentSubtitle, setCurrentSubtitle] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let func = async () => {
+      let accessToken = await AsyncStorage.getItem("accessToken");
+      if(src.charAt(0) == '/') {
+        console.log("aaya : " + `http://192.168.1.18:5000${src}/${accessToken}`)
+        setUrl(`http://192.168.1.18:5000${src}/${accessToken}`)
+      }
+      else {
+        setUrl(src);
+      }
+    }
+    func()
+    
+  }, [])
+
+  useEffect(() => {
+    const fetchSrtFile = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('http://192.168.1.18:5000/sub');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const srtFileContent = await response.text();
+        
+        const parser = new SrtParser();
+        const parsedSubtitles = parser.fromSrt(srtFileContent);
+        
+        // Log the parsed subtitles properly
+        console.log('Parsed subtitles:', JSON.stringify(parsedSubtitles, null, 2));
+        
+        setSubtitles(parsedSubtitles);
+        setLoading(false);
+        
+        // Debug log after state update
+        setTimeout(() => {
+          console.log('Current subtitles state:', JSON.stringify(subtitles, null, 2));
+        }, 100);
+      } catch (error) {
+        console.error('Error fetching or parsing SRT file:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchSrtFile();
+  }, []); // Empty dependency array means this runs once on mount
+
+  // Debug useEffect to monitor subtitle state changes
+  useEffect(() => {
+    console.log('Subtitles state updated. Current subtitles:', JSON.stringify(subtitles, null, 2));
+    console.log('Number of subtitles:', subtitles.length);
+  }, [subtitles]);
+
+  
   let [play, setPlay] = useState(true);
   const videoRef = useRef<VideoPlayerRef>(null);
   const [ppb, setPpb] = useState(true);
   const [volume, setVolume] = useState(1);
-  let [viz, setViz] = useState(true)
+  let [viz, setViz] = useState(true);
+  let [ts, setTs] = useState(0)
+  let [duration, setDuration] = useState(0);
+  let [st, setSt] = useState<String | null>(null)
 
-  const [lastEventType, setLastEventType] = React.useState("");
+  const [lastEventType, setLastEventType] = useState("");
 
   const myTVEventHandler = (evt:HWEvent) => {
     console.log(evt.eventType)
@@ -189,14 +271,67 @@ function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  
     };
     useTVEventHandler(myTVEventHandler);
 
-    useEffect(()=>{console.log(lastEventType)},[lastEventType])
+    // useEffect(()=>{console.log(lastEventType)},[lastEventType])
+    useEffect(() =>  {
+      if(viz && lastEventType == 'up') {
+        setViz(false);
+        
+      }
+      else if(!viz) {
+        if(lastEventType == 'down') {
+          setViz(true)
+        }
+        else if(lastEventType == 'left') {
+            let newt = ts - 10;
+            if(ts < 0) {newt = 0}
+            videoRef.current?.seek(newt);
+            setLastEventType(""); 
+        }
+        else if(lastEventType == 'right') {
+          let newt = ts + 10;
+          if(duration < newt) {newt = duration}
+          videoRef.current?.seek(newt);
+          setLastEventType("");
+        }
+      }
+      // if(!viz && lastEventType === 'left') {
+      //   let newt = ts - 10;
+      //   if(ts < 0) {newt = 0}
+      //   videoRef.current?.seek(newt);
+      //   setLastEventType(""); 
+      //   return;
+      // }
+      // if(!viz && lastEventType === 'right') {
+      //   let newt = ts + 10;
+      //   videoRef.current?.seek(newt);
+      //   setLastEventType(""); 
+      //   return;
+      // }
+      // if(viz && lastEventType != "") {
+      //   if(lastEventType === 'up') {
+      //     setViz(false);
+      //   }
+        
+      // }
+      // if(!viz && lastEventType != "") {
+        
+      //   setViz(true);
+      //   // setPpb(true);
+      // }
+    },[lastEventType])
   
   useEffect(() => {
     videoRef.current?.setVolume(1);
   }, [videoRef])
+
+  const findSubtitle = React.useCallback((currentTime: number) => {
+    return subtitles.find(
+      sub => currentTime >= sub.startSeconds && currentTime <= sub.endSeconds
+    );
+  }, [subtitles]);
  
   return (
-    <TVFocusGuideView style={{ position : 'relative', width : '100%', height : '100%' }}>
+    <TVFocusGuideView style={{ backgroundColor : '#222222', position : 'relative', width : '100%', height : '100%' }}>
 
       {/* Touchable area to pause/play the video */}
       {/* <TouchableOpacity
@@ -221,20 +356,24 @@ function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  
         }}
       /> */}
 
-<TVFocusGuideView hasTVPreferredFocus = {true} style={{
-  
-      width: '80%',
+<TVFocusGuideView autoFocus = {true} style={{
+      opacity : viz ? 1 : 0,
+      width: '90%',
       height: 70,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       borderRadius : 5,
       position: 'absolute', 
       bottom: 20, 
-      left: '10%', 
+      left: '5%', 
       zIndex : 20,
       display : 'flex',
       justifyContent : 'center',
+      paddingRight : 20,
       alignItems : 'center', flexDirection : 'row'
   }}>
+    
+    <View style = {{backgroundColor : 'transparent', width : '75%', height : 30, display : 'flex', justifyContent : 'center', alignItems : 'center', flexDirection : 'row'}}><Text style = {{color : 'white', justifyContent : 'center', display : 'flex', alignItems : 'center', textAlign : 'center'}}>{Math.floor(ts/3600)}:{Math.floor((ts%3600)/60)}:{Math.round(ts)%60}</Text><View style = {{width : '70%', height : 7, backgroundColor : 'white', marginLeft : 10, marginRight : 10, position : 'relative', display : 'flex', justifyContent : 'flex-start', alignItems : 'center', flexDirection : 'row'}}><View style = {{backgroundColor : 'red', width : `${ts/duration*100}%`, height : 8}}></View></View><Text style = {{color : 'white', width : 50}}>{Math.floor(duration/3600)}:{Math.floor((duration%3600)/60)}:{Math.round(duration) % 60}</Text></View>
+
     <TouchableOpacity hasTVPreferredFocus = {ppb} onBlur={() => {setPpb(false)}} onPress={() => {
       if(play) {
         videoRef.current?.pause();
@@ -251,7 +390,11 @@ function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  
       {/* Video Player */}
       <Video
         ref={videoRef}
-        source={{ uri: String(src) }}
+        source={{ uri: String(url) }}
+        
+        onProgress={( {currentTime}) => {setTs(currentTime); let subtitle = findSubtitle(currentTime); setSt(subtitle?.text || null);}}
+        
+        onLoad={({duration}) => setDuration(duration)}
         style={{
           width: '100%',
           height: '100%',
@@ -262,7 +405,11 @@ function Player({ route }: { route: RouteProp<RootStackParamList, 'player'> })  
       />
 
       {/* Bottom red bar with volume and audio/subtitles buttons */}
-      
+      <View style={{ position: 'absolute', zIndex: 20, left: '10%', bottom: viz ? 100 : 35, width: '80%', height: 45, backgroundColor: 'rgba(0, 0, 0, 0)', justifyContent: 'center', alignItems: 'center' }}>
+   {/* <Subtitles currentTime={ts} selectedsubtitle={{ file: 'http://192.168.1.18:5000/sub' }} /> */}
+   <Text style = {{ backgroundColor: st != null?  'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0)', paddingBottom : 5, paddingTop : 5,paddingLeft : 10, paddingRight : 10, color : 'white', fontSize : 17, borderRadius : 3}}>{st}</Text>
+</View>
+
     </TVFocusGuideView>
   );
 }
@@ -319,11 +466,11 @@ function Main({ route }: { route: RouteProp<RootStackParamList, 'main'> }) {
           return;
         }
   
-        // Log the response text to inspect it
+        
         const responseText = await res.text();  // Use `.text()` to get the raw response
         console.log("Response text:", responseText);
   
-        // Now parse the response if it's valid JSON
+        
         const data = JSON.parse(responseText);
         setSf(data);  // Assuming the data is already in an array format
       } catch (error) {
